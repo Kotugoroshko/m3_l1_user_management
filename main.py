@@ -1,37 +1,37 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.orm import Session
+from schemas import UserCreate
+from database import SessionLocal, engine
+from crud import create_user, get_user, get_all_users
+import models
 
 app = FastAPI()
 
-# Студенти можуть одразу використовувати схеми замість використання простого класу
-class User:
-    def __init__(self, user_id: int, username: str, email: str):
-        self.id = user_id
-        self.username = username
-        self.email = email
+models.Base.metadata.create_all(bind=engine)
+
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
-users = [
-    User(user_id=1, username="john_doe", email="john@example.com"),
-    User(user_id=2, username="jane_doe", email="jane@example.com"),
-]
+# Ендпоінти FastAPI
+@app.post("/create_user")
+def create_user_endpoint(user: UserCreate, db: Session = Depends(get_db)):
+    return create_user(db, user)
 
 
 @app.get("/users/{user_id}")
-def get_user(user_id: int):
-    for user in users:
-        if user.id == user_id:
-            return user
-    return {"error": "User not found"}
+def read_user(user_id: int, db: Session = Depends(get_db)):
+    user = get_user(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 
 @app.get("/users")
-def get_all_users():
-    return users
-
-
-@app.post("/create_user")
-def create_user(username: str, email: str):
-    user_id = len(users) + 1
-    new_user = User(user_id=user_id, username=username, email=email)
-    users.append(new_user)
-    return new_user
+def read_users(db: Session = Depends(get_db)):
+    return get_all_users(db)
